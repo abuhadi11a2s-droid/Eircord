@@ -1,7 +1,7 @@
 const { app, BrowserWindow, session, desktopCapturer, shell } = require('electron');
 
 // ← غيّر الرابط لرابط سيرفرك بعد ما ترفعه (مثال Render)
-const SITE = 'https://samar.onrender.com';
+const SITE = 'https://eircord.onrender.com';
 
 let win;
 if (!app.requestSingleInstanceLock()) { app.quit(); }
