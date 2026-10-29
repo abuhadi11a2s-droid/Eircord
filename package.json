@@ -1,0 +1,1 @@
+{"name":"samar","version":"1.0.0","description":"Samar - voice, screen share and chat","main":"server.js","scripts":{"start":"node server.js"},"dependencies":{"ws":"^8.18.0"}}

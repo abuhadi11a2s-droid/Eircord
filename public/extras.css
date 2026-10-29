@@ -1,0 +1,27 @@
+.mm{cursor:pointer;border-radius:3px}
+.mm:hover{background:var(--hv)}
+.gem.dn{background:radial-gradient(circle at 35% 30%,#fff,#ff8a74 40%,#c42a12);box-shadow:0 0 0 1px #7a1204}
+.pic{display:block;max-width:min(360px,100%);max-height:280px;margin-top:6px;border-radius:5px;border:1px solid var(--bd);object-fit:contain}
+.pend{margin:0 12px 6px;padding:6px;display:flex;align-items:center;gap:8px;width:max-content;border:1px solid var(--bd);border-radius:5px;background:var(--in)}
+.pend img{height:56px;border-radius:4px}
+.pfh{display:flex;gap:12px;align-items:center}
+.pfh h3{margin:0 0 2px}
+.pfs{font-size:12px;color:var(--mu)}
+.pfb{white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;min-height:44px;border:1px solid var(--ln);border-radius:4px;background:var(--in)}
+#bio{width:100%;font:inherit;padding:6px;border:1px solid #7a9dc4;border-radius:3px;background:var(--in);color:var(--tx);resize:vertical}
+#profb{width:min(400px,92vw)}
+.box label input[type=range]{width:100%}
+
+/* speaking ring + mute/deafen badges */
+.tile,.vu{position:relative}
+.vu.sp .av,.mm.sp .av,.tile.sp .av{border-radius:50%;box-shadow:0 0 0 2px #fff,0 0 0 4px #3fb01c;transition:box-shadow .15s}
+.sbadge{position:absolute;right:2px;top:2px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;background:#6b7a8a;border:1px solid #2b3a4a;box-shadow:0 1px 2px rgba(0,0,0,.4);pointer-events:none}
+.sbadge.dn{background:#c42a12}
+.tile .sbadge{top:6px;right:8px}
+
+/* private calls */
+#callbar{position:fixed;top:48px;right:22px;z-index:20;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:var(--p1);border:1px solid var(--bd);color:var(--tx);box-shadow:0 6px 16px rgba(0,30,70,.35);font-weight:600}
+#ringbox{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:rgba(0,40,90,.35)}
+.rb{padding:20px;border-radius:8px;background:var(--p1);border:1px solid var(--bd);color:var(--tx);display:flex;flex-direction:column;gap:14px;min-width:260px;text-align:center;box-shadow:0 10px 30px rgba(0,30,70,.4)}
+.rbtn{display:flex;gap:10px;justify-content:center}
+.rbtn .gb{width:auto;padding:0 18px;height:36px}

@@ -1,0 +1,20 @@
+{
+  "name": "samar-desktop",
+  "version": "1.0.0",
+  "description": "Samar desktop app",
+  "main": "main.js",
+  "author": "Samar",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.samar.app",
+    "productName": "Samar",
+    "win": { "target": "nsis" }
+  }
+}
