@@ -6,6 +6,7 @@ const root = path.join(__dirname, 'public');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'servers.json');
 const EXTRA_FILE = path.join(DATA_DIR, 'extra.json');
+const ACC_FILE = path.join(DATA_DIR, 'accounts.json');
 const MAIN = 'main';
 const LIM = { ownedServers: 5, totalServers: 500, textCh: 20, voiceRooms: 10, history: 200, bio: 160, text: 2000, img: 500000 };
 
@@ -23,6 +24,7 @@ const ice = () => {
 };
 const srv = http.createServer((q, s) => {
   if (q.url === '/ice') { s.writeHead(200, { 'Content-Type': 'application/json' }); return s.end(JSON.stringify(ice())); }
+  if (q.method === 'POST' && q.url === '/auth') return handleAuth(q, s);
   if (q.url === '/health') { s.writeHead(200); return s.end('ok'); }
   let u; try { u = decodeURIComponent(q.url.split('?')[0]); } catch { u = '/'; }
   const f = path.join(root, path.normalize(u === '/' ? '/index.html' : u));
@@ -140,6 +142,58 @@ const cleanName = (x, n = 24) => String(x || '').replace(/\s+/g, ' ').trim().sli
 const cleanCh = x => String(x || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\p{L}\p{N}_-]/gu, '').slice(0, 24);
 const err = (c, m) => send(c, { t: 'err', m });
 
+
+/* ---------- accounts: name + password (scrypt). A new name creates a new account ---------- */
+const accounts = new Map(), byToken = new Map();   // lowercase name -> account, token -> account
+function loadAccounts() {
+  try { for (const a of JSON.parse(fs.readFileSync(ACC_FILE, 'utf8'))) { accounts.set(a.name.toLowerCase(), a); byToken.set(a.token, a); } }
+  catch { /* first run */ }
+}
+function saveAccounts() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(ACC_FILE + '.tmp', JSON.stringify([...accounts.values()]));
+    fs.renameSync(ACC_FILE + '.tmp', ACC_FILE);
+  } catch (e) { console.error('accounts save failed:', e.message); }
+}
+const scrypt = (pw, salt) => new Promise((res, rej) => crypto.scrypt(pw, salt, 64, (e, k) => e ? rej(e) : res(k)));
+const authHits = new Map();
+function authLimited(ip) {
+  const now = Date.now(), a = (authHits.get(ip) || []).filter(t => now - t < 60000);
+  a.push(now); authHits.set(ip, a); return a.length > 12;
+}
+setInterval(() => { const now = Date.now(); for (const [k, a] of authHits) if (!a.some(t => now - t < 60000)) authHits.delete(k); }, 60000);
+const jsonOut = (s, code, o) => { s.writeHead(code, { 'Content-Type': 'application/json' }); s.end(JSON.stringify(o)); };
+
+function handleAuth(q, s) {
+  const ip = String(q.headers['x-forwarded-for'] || q.socket.remoteAddress || '').split(',')[0].trim();
+  if (authLimited(ip)) return jsonOut(s, 429, { m: 'Too many attempts, wait a minute' });
+  let body = '';
+  q.on('data', d => { body += d; if (body.length > 4096) q.destroy(); });
+  q.on('end', async () => {
+    try {
+      let j; try { j = JSON.parse(body); } catch { return jsonOut(s, 400, { m: 'Bad request' }); }
+      const name = cleanName(j.name), pass = String(j.pass || '');
+      if (name.length < 2) return jsonOut(s, 400, { m: 'Name must be at least 2 characters' });
+      if (pass.length < 4 || pass.length > 100) return jsonOut(s, 400, { m: 'Password must be at least 4 characters' });
+      const key = name.toLowerCase(), acc = accounts.get(key);
+      if (acc) {
+        const h = await scrypt(pass, acc.salt), good = Buffer.from(acc.hash, 'hex');
+        if (h.length !== good.length || !crypto.timingSafeEqual(h, good)) return jsonOut(s, 401, { m: 'Wrong password for this name' });
+        return jsonOut(s, 200, { token: acc.token, name: acc.name });
+      }
+      if (key === 'samar') return jsonOut(s, 400, { m: 'This name is reserved' });
+      if (accounts.size >= 20000) return jsonOut(s, 503, { m: 'Account limit reached' });
+      const salt = rid(16), hash = (await scrypt(pass, salt)).toString('hex');
+      const na = { name, salt, hash, token: rid(24), created: Date.now() };
+      accounts.set(key, na); byToken.set(na.token, na); saveAccounts();
+      jsonOut(s, 200, { token: na.token, name: na.name, created: true });
+    } catch (e) { console.error('auth error:', e.message); jsonOut(s, 500, { m: 'Server error' }); }
+  });
+}
+
+loadAccounts();
+
 /* ---------- websocket ---------- */
 const wss = new WebSocketServer({ server: srv, maxPayload: 3 * 1024 * 1024 });
 setInterval(() => { for (const ws of wss.clients) { if (ws.alive === false) { ws.terminate(); continue; } ws.alive = false; try { ws.ping(); } catch { } } }, 30000);
@@ -151,9 +205,11 @@ wss.on('connection', ws => {
   ws.on('message', raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (m.t === 'hello' && !id) {
+      const acc = byToken.get(String(m.token || ''));
+      if (!acc) { ws.send(JSON.stringify({ t: 'needlogin' })); return ws.close(); }
       id = String(nid++);
-      const token = /^[\w-]{16,64}$/.test(m.token) ? m.token : rid(16);
-      const c = { ws, name: cleanName(m.name) || 'Guest', token, uid: uidOf(token), share: false, vroom: null, mute: false, deaf: false };
+      const token = acc.token;
+      const c = { ws, name: acc.name, token, uid: uidOf(token), share: false, vroom: null, mute: false, deaf: false };
       clients.set(id, c);
       const mine = [...servers.values()].filter(s => member(s, token));
       send(c, { t: 'init', id, servers: mine.map(s => full(s, c)) });
@@ -210,6 +266,18 @@ wss.on('connection', ws => {
     else if (m.t === 'dmopen') {
       const to = String(m.uid || '');
       send(c, { t: 'dmh', with: to, list: dms.get(dmKey(c.uid, to)) || [] });
+    }
+
+
+    /* --- private 1-to-1 calls (signalling only, audio goes peer to peer) --- */
+    else if (m.t === 'dcall' || m.t === 'dacc' || m.t === 'ddec' || m.t === 'dend' || m.t === 'csig') {
+      const to = String(m.to || ''); if (!to || to === c.uid) return;
+      const peers = [...clients.values()].filter(x => x.uid === to);
+      if (!peers.length) { if (m.t === 'dcall') err(c, 'That person is offline right now'); return; }
+      const o = m.t === 'dcall' ? { t: 'dring', from: c.uid, name: c.name }
+        : m.t === 'csig' ? { t: 'csig', from: c.uid, data: m.data }
+        : { t: m.t, from: c.uid };
+      for (const p of peers) send(p, o);
     }
 
     /* --- servers --- */
